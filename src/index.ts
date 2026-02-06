@@ -158,7 +158,7 @@ const main = async () => {
 
     {
       selector:
-        "/html/body/div[2]/div[1]/div[2]/div/div/div[2]/div/div/div/div/div/div/div/div",
+        "xpath=/html/body/div[2]/div[1]/div[2]/div/div/div[2]/div/div/div/div/div/div/div/div",
     },
   );
   console.log(JSON.stringify(extractActions, null, 2));
@@ -167,23 +167,29 @@ const main = async () => {
   const itemSelectAction = extractActions[randomIndex];
   console.log("Selecting item:", itemSelectAction);
   await zeptoPage.pause();
-  await zeptoPage
-    .locator(searchInputAction!.selector)
-    .fill(itemSelectAction.name);
-  await zeptoPage.pause();
+  const productClickActions = await stagehand.observe(
+    `click on the product element that implies "${itemSelectAction.name}"`,
+  );
+  console.log("Product Click Actions:", productClickActions);
+  if (productClickActions.length > 0) {
+    await zeptoPage
+      .locator(productClickActions[0].selector)
+      .first()
+      .click({ force: true });
+  }
 
   const addToCartAction = await stagehand.observe(
-    `I want to add ${itemSelectAction.name} to cart. Give me the action to do that.`,
-    {
-      selector: `xpath=/html/body/div[2]/div[1]/header[2]/div[1]/div[1]/div/div[1]/div/div[2]/div/div`,
-    },
+    `click the "Add" button located below the product image for "${itemSelectAction.name}"`,
   );
   console.log("Add to Cart Action:", addToCartAction);
-  await zeptoPage.locator(addToCartAction[0].selector).click();
-  await zeptoPage.pause();
-  await zeptoPage.waitForTimeout(500);
-  // press enter
-  await zeptoPage.keyboard.press("Enter");
+  if (addToCartAction.length > 0) {
+    const addButton = zeptoPage.locator(addToCartAction[0].selector).first();
+    await addButton.waitFor({ state: "visible", timeout: 5000 });
+    await addButton.click({ force: true });
+  } else {
+    console.log("Could not find Add to Cart button.");
+  }
+  await zeptoPage.waitForTimeout(2000); // Wait for cart update
   await zeptoPage.pause();
 
   await stagehand.close();
