@@ -114,9 +114,8 @@ const main = async () => {
   await zeptoPage.pause();
   // Scroll to top to make sure proper header is visible
 
-  await zeptoPage.pause();
   const actions = await stagehand.observe(
-    ` find the search bar in top header and give me the action to enter search query in it.`,
+    ` find me all input & button in header.`,
   );
   console.log("Observed Actions:", actions);
   const searchInputAction = actions.find((action) => {
