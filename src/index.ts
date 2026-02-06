@@ -172,18 +172,24 @@ const main = async () => {
   );
   console.log("Product Click Actions:", productClickActions);
   if (productClickActions.length > 0) {
-    await zeptoPage.locator(productClickActions[0].selector).first().click();
+    await zeptoPage
+      .locator(productClickActions[0].selector)
+      .first()
+      .click({ force: true });
   }
 
   const addToCartAction = await stagehand.observe(
-    `I want to add ${itemSelectAction.name} to cart. Give me the action to do that.`,
+    `click the "Add" button located below the product image for "${itemSelectAction.name}"`,
   );
   console.log("Add to Cart Action:", addToCartAction);
-  await zeptoPage.locator(addToCartAction[0].selector).click();
-  await zeptoPage.pause();
-  await zeptoPage.waitForTimeout(500);
-  // press enter
-  await zeptoPage.keyboard.press("Enter");
+  if (addToCartAction.length > 0) {
+    const addButton = zeptoPage.locator(addToCartAction[0].selector).first();
+    await addButton.waitFor({ state: "visible", timeout: 5000 });
+    await addButton.click({ force: true });
+  } else {
+    console.log("Could not find Add to Cart button.");
+  }
+  await zeptoPage.waitForTimeout(2000); // Wait for cart update
   await zeptoPage.pause();
 
   await stagehand.close();
