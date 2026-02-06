@@ -158,7 +158,7 @@ const main = async () => {
 
     {
       selector:
-        "/html/body/div[2]/div[1]/div[2]/div/div/div[2]/div/div/div/div/div/div/div/div",
+        "xpath=/html/body/div[2]/div[1]/div[2]/div/div/div[2]/div/div/div/div/div/div/div/div",
     },
   );
   console.log(JSON.stringify(extractActions, null, 2));
@@ -167,16 +167,16 @@ const main = async () => {
   const itemSelectAction = extractActions[randomIndex];
   console.log("Selecting item:", itemSelectAction);
   await zeptoPage.pause();
-  await zeptoPage
-    .locator(searchInputAction!.selector)
-    .fill(itemSelectAction.name);
-  await zeptoPage.pause();
+  const productClickActions = await stagehand.observe(
+    `click on the product element that implies "${itemSelectAction.name}"`,
+  );
+  console.log("Product Click Actions:", productClickActions);
+  if (productClickActions.length > 0) {
+    await zeptoPage.locator(productClickActions[0].selector).first().click();
+  }
 
   const addToCartAction = await stagehand.observe(
     `I want to add ${itemSelectAction.name} to cart. Give me the action to do that.`,
-    {
-      selector: `xpath=/html/body/div[2]/div[1]/header[2]/div[1]/div[1]/div/div[1]/div/div[2]/div/div`,
-    },
   );
   console.log("Add to Cart Action:", addToCartAction);
   await zeptoPage.locator(addToCartAction[0].selector).click();
