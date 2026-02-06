@@ -167,29 +167,21 @@ const main = async () => {
   const itemSelectAction = extractActions[randomIndex];
   console.log("Selecting item:", itemSelectAction);
   await zeptoPage.pause();
-  const productClickActions = await stagehand.observe(
-    `click on the product element that implies "${itemSelectAction.name}"`,
-  );
-  console.log("Product Click Actions:", productClickActions);
-  if (productClickActions.length > 0) {
-    await zeptoPage
-      .locator(productClickActions[0].selector)
-      .first()
-      .click({ force: true });
-  }
+  console.log("Adding item to cart:", itemSelectAction.name);
 
-  const addToCartAction = await stagehand.observe(
-    `click the "Add" button located below the product image for "${itemSelectAction.name}"`,
-  );
-  console.log("Add to Cart Action:", addToCartAction);
-  if (addToCartAction.length > 0) {
-    const addButton = zeptoPage.locator(addToCartAction[0].selector).first();
-    await addButton.waitFor({ state: "visible", timeout: 5000 });
-    await addButton.click({ force: true });
-  } else {
-    console.log("Could not find Add to Cart button.");
-  }
-  await zeptoPage.waitForTimeout(2000); // Wait for cart update
+  // Locate the specific product card by text and click the "Add" button inside it
+  await zeptoPage
+    .locator("div")
+    .filter({ hasText: itemSelectAction.name })
+    .getByRole("button", { name: "add" })
+    .first()
+    .click();
+
+  await zeptoPage.waitForTimeout(2000);
+  await zeptoPage.pause();
+  await zeptoPage.waitForTimeout(500);
+  // press enter
+  await zeptoPage.keyboard.press("Enter");
   await zeptoPage.pause();
 
   await stagehand.close();
