@@ -114,9 +114,7 @@ const main = async () => {
   await zeptoPage.pause();
   // Scroll to top to make sure proper header is visible
 
-  const actions = await stagehand.observe(
-    ` find me all input & button in header.`,
-  );
+  const actions = await stagehand.observe(` find the search bar .`);
   console.log("Observed Actions:", actions);
   const searchInputAction = actions.find((action) => {
     const keywords = [
@@ -131,14 +129,25 @@ const main = async () => {
   });
   console.log("Search Input Action:", searchInputAction);
   await zeptoPage.pause();
-  await zeptoPage.locator(searchInputAction!.selector).fill("milk");
+  const searchLocator = zeptoPage.locator(searchInputAction!.selector);
+  await searchLocator.click();
+
+  // Wait for the actual input field to be visible after clicking the trigger
+  // Zepto often uses an <a> tag as a wrapper/trigger, so we need to find the real input
+  const inputLocator = zeptoPage.locator(
+    'input[placeholder*="Search"], input[type="text"]',
+  );
+  await inputLocator.first().waitFor({ state: "visible", timeout: 5000 });
+
+  await inputLocator.first().pressSequentially("milk", { delay: 100 });
+  await zeptoPage.waitForTimeout(1000);
   //hit enter to search
-  await zeptoPage.locator(searchInputAction!.selector).press("Enter");
+  await inputLocator.first().press("Enter");
   //delay for search results to load
-  await zeptoPage.pause();
+  await zeptoPage.waitForTimeout(5000);
   // extract cheapest product name and price from the results using stagehand act
   const extractActions = await stagehand.extract(
-    "Extract each item name price and quantity from the search results. Get first 20 items only.",
+    "Extract each item name price and quantity from the search results. Get first 15 items only.",
     z.array(
       z.object({
         name: z.string().describe("Name of the item").min(1),
@@ -149,7 +158,7 @@ const main = async () => {
 
     {
       selector:
-        "xpath=/html/body/div[2]/div[1]/div[2]/div/div/div[3]/div/div/div[1]/div/div",
+        "/html/body/div[2]/div[1]/div[2]/div/div/div[2]/div/div/div/div/div/div/div/div",
     },
   );
   console.log(JSON.stringify(extractActions, null, 2));
