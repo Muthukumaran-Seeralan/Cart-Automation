@@ -1,24 +1,20 @@
 import "dotenv/config";
-import {
-  Action,
-  defaultExtractSchema,
-  ExtractOptions,
-  InferStagehandSchema,
-  ObserveOptions,
-  pageTextSchema,
-  Stagehand,
-  StagehandZodSchema,
-} from "@browserbasehq/stagehand";
+import { Stagehand } from "@browserbasehq/stagehand";
 import findChrome from "chrome-finder";
-import { BrowserContext, chromium, type Page } from "playwright-core";
-import z from "zod";
+import {
+  BrowserContext,
+  chromium,
+  selectors,
+  type Page,
+} from "playwright-core";
+import { z } from "zod";
 
 class BrowserContextManager {
   private static context: BrowserContext | undefined;
 
   private constructor() {
     throw new Error(
-      "Cannot instantiate BrowserContextManager directly. Use methods instead.",
+      "Cannot instantiate BrowserContextManager directly. Use static methods instead.",
     );
   }
 
@@ -41,18 +37,17 @@ class BrowserContextManager {
     return this.context;
   }
   static async getCdpUrl() {
-    const result = await fetch("http://localhost:9222/json/version");
-    const data = (await result.json()) as { webSocketDebuggerUrl: string };
+    const context = await fetch("http://localhost:9222/json/version");
+    const data = (await context.json()) as { webSocketDebuggerUrl: string };
     return data.webSocketDebuggerUrl;
   }
 }
 
 class Automation {
-  protected HOME_URL = "https://google.com";
-  protected page: Page | undefined;
-  protected stagehand: Stagehand | undefined;
-
-  protected async getPage() {
+  protected static HOME_URL = "https://google.com";
+  protected static page: Page | undefined;
+  protected static stagehand: Stagehand | undefined;
+  static async getPage() {
     if (this.page) {
       return this.page;
     }
@@ -62,12 +57,14 @@ class Automation {
     this.page = page;
     return page;
   }
-
-  private async getStageHand() {
+  static async getStageHand() {
     if (this.stagehand) {
       return this.stagehand;
     }
+    // TODO: reuse stagehand instances across automations
     await this.getPage();
+    console.log(process.env.STAGEHAND_MODEL_NAME);
+    console.log(process.env.STAGEHAND_MODEL_API_KEY);
     const cdpUrl = await BrowserContextManager.getCdpUrl();
     this.stagehand = new Stagehand({
       env: "LOCAL",
@@ -84,164 +81,114 @@ class Automation {
     await this.stagehand.init();
     return this.stagehand;
   }
-
-  observe(): Promise<Action[]>;
-  observe(options: ObserveOptions): Promise<Action[]>;
-  observe(instruction: string, options?: ObserveOptions): Promise<Action[]>;
-  async observe(paramOne?: string | ObserveOptions, paramTwo?: ObserveOptions) {
-    const stagehand = await this.getStageHand();
-
-    if (!stagehand) {
-      throw new Error("Stagehand not initialized");
-    }
-    stagehand.extract;
-    await this.page?.screenshot({ path: "screenshot.png" });
-
-    let finalParamOne: string | ObserveOptions = Object.assign({}, paramOne);
-    let finalParamTwo: ObserveOptions | undefined = Object.assign({}, paramTwo);
-
-    if (typeof paramOne === "undefined") {
-      const options = paramTwo || {};
-      options.page = this.page;
-      finalParamOne = options;
-    } else if (typeof paramOne === "string") {
-      const options = paramTwo || {};
-      options.page = this.page;
-      finalParamOne = paramOne;
-      finalParamTwo = options;
-    } else {
-      const options = paramOne || {};
-      options.page = this.page;
-      finalParamOne = options;
-    }
-    return await stagehand.observe(finalParamOne as any, finalParamTwo);
-  }
-
-  extract(): Promise<z.infer<typeof pageTextSchema>>;
-  extract(options: ExtractOptions): Promise<z.infer<typeof pageTextSchema>>;
-  extract(
-    instruction: string,
-    options?: ExtractOptions,
-  ): Promise<z.infer<typeof defaultExtractSchema>>;
-  extract<T extends StagehandZodSchema>(
-    instruction: string,
-    schema: T,
-    options?: ExtractOptions,
-  ): Promise<InferStagehandSchema<T>>;
-  async extract<T extends StagehandZodSchema>(
-    paramOne?: string | ExtractOptions,
-    paramTwo?: ExtractOptions | T,
-    paramThree?: ExtractOptions,
-  ) {
-    const stagehand = await this.getStageHand();
-
-    if (!stagehand) {
-      throw new Error("Stagehand not initialized");
-    }
-    let finalInstruction: string | undefined;
-    let finalOptions: ExtractOptions = { page: this.page };
-    let finalSchema: StagehandZodSchema | undefined;
-    if (typeof paramOne === "undefined") {
-      // No parameters
-    } else if (typeof paramOne === "string") {
-      finalInstruction = paramOne;
-      if (paramTwo && !(paramTwo instanceof z.ZodType)) {
-        finalOptions = { ...finalOptions, ...paramTwo };
-      }
-      if (paramTwo && paramTwo instanceof z.ZodType) {
-        finalSchema = paramTwo;
-      }
-      if (paramThree) {
-        finalOptions = { ...finalOptions, ...paramThree };
-      }
-    } else {
-      finalOptions = { ...finalOptions, ...paramOne };
-    }
-    return await stagehand.extract(
-      finalInstruction || "Extract the text content of the page",
-      finalSchema || pageTextSchema,
-      finalOptions,
-    );
-  }
 }
 
 class BlinkitAutomation extends Automation {
-  protected HOME_URL = "https://blinkit.com";
-  private SEARCH_URL = "https://blinkit.com/s/";
-
-  public async addToCart(itemName: string, quantity: number) {
-    const page = await this.getPage();
-    await page.goto(this.SEARCH_URL);
-    await page.pause();
-
-    const actions = await this.observe(
-      "Get me  all the inputs, buttons and links",
-    );
-    const searchInputAction = getMatchingActions(actions, [
-      ["search", "input"],
-      ["search", "textbox"],
-    ])[0];
-    await page
-      .locator(searchInputAction.selector)
-      .pressSequentially(itemName, { delay: 300 });
-    await page.pause();
-    const items = await this.extract(
-      "Extract each item name price and quantity from the search results. Get first 20 items only.",
-      z.array(
-        z.object({
-          name: z.string().describe("Name of the item").min(1),
-          price: z.string().describe("Price of the item"),
-          qty: z.string().describe("Quantity details of the item"),
-        }),
-      ),
-      {
-        selector:
-          "xpath=/html/body/div[1]/div/div/div[3]/div/div/div[2]/div[1]/div/div[1]",
-      },
-    );
-    console.log(JSON.stringify(items, null, 2));
-  }
+  protected static HOME_URL = "https://blinkit.com";
 }
 
 class ZeptoAutomation extends Automation {
-  protected HOME_URL = "https://zepto.com";
+  protected static HOME_URL = "https://zepto.com";
 }
 
 class InstamartAutomation extends Automation {
-  protected HOME_URL = "https://www.swiggy.com/instamart";
+  protected static HOME_URL = "https://www.swiggy.com/instamart";
 }
 
 class MinutesAutomation extends Automation {
-  protected HOME_URL =
+  protected static HOME_URL =
     "https://www.flipkart.com/flipkart-minutes-store?marketplace=HYPERLOCAL";
 }
 
 class Amazon10Automation extends Automation {
-  protected HOME_URL = "https://www.amazon.in/";
+  protected static HOME_URL = "https://www.amazon.in/";
 }
 
 class BigBasketAutomation extends Automation {
-  protected HOME_URL = "https://www.bigbasket.com";
-}
-
-function getMatchingActions(actions: Action[], keywords: string[][]): Action[] {
-  return actions.filter((action) => {
-    return keywords.some((keywordCombination) => {
-      return keywordCombination.every((keyword) =>
-        action.description.toLowerCase().includes(keyword.toLowerCase()),
-      );
-    });
-  });
+  protected static HOME_URL = "https://www.bigbasket.com";
 }
 
 const main = async () => {
-  const automation = new BlinkitAutomation();
-  await automation.addToCart("icecream", 2);
+  const stagehand = await ZeptoAutomation.getStageHand();
+  const zeptoPage = await ZeptoAutomation.getPage();
+  await zeptoPage.pause();
+  // Scroll to top to make sure proper header is visible
+
+  await zeptoPage.pause();
+  const actions = await stagehand.observe(
+    ` find the search bar in top header and give me the action to enter search query in it.`,
+  );
+  console.log("Observed Actions:", actions);
+  const searchInputAction = actions.find((action) => {
+    const keywords = [
+      ["search", "textbox"],
+      ["search", "input"],
+      ["search", "product"],
+    ];
+    const description = action.description.toLowerCase();
+    return keywords.some((combination) =>
+      combination.every((keyword) => description.includes(keyword)),
+    );
+  });
+  console.log("Search Input Action:", searchInputAction);
+  await zeptoPage.pause();
+  await zeptoPage.locator(searchInputAction!.selector).fill("milk");
+  //hit enter to search
+  await zeptoPage.locator(searchInputAction!.selector).press("Enter");
+  //delay for search results to load
+  await zeptoPage.pause();
+  // extract cheapest product name and price from the results using stagehand act
+  const extractActions = await stagehand.extract(
+    "Extract each item name price and quantity from the search results. Get first 20 items only.",
+    z.array(
+      z.object({
+        name: z.string().describe("Name of the item").min(1),
+        price: z.string().describe("Price of the item"),
+        qty: z.string().describe("Quantity details of the item"),
+      }),
+    ),
+
+    {
+      selector:
+        "xpath=/html/body/div[2]/div[1]/div[2]/div/div/div[3]/div/div/div[1]/div/div",
+    },
+  );
+  console.log(JSON.stringify(extractActions, null, 2));
+  // now let me select from the extracted items
+  const randomIndex = Math.floor(Math.random() * extractActions.length);
+  const itemSelectAction = extractActions[randomIndex];
+  console.log("Selecting item:", itemSelectAction);
+  await zeptoPage.pause();
+  await zeptoPage
+    .locator(searchInputAction!.selector)
+    .fill(itemSelectAction.name);
+  await zeptoPage.pause();
+
+  const addToCartAction = await stagehand.observe(
+    `I want to add ${itemSelectAction.name} to cart. Give me the action to do that.`,
+    {
+      selector: `xpath=/html/body/div[2]/div[1]/header[2]/div[1]/div[1]/div/div[1]/div/div[2]/div/div`,
+    },
+  );
+  console.log("Add to Cart Action:", addToCartAction);
+  await zeptoPage.locator(addToCartAction[0].selector).click();
+  await zeptoPage.pause();
+  await zeptoPage.waitForTimeout(500);
+  // press enter
+  await zeptoPage.keyboard.press("Enter");
+  await zeptoPage.pause();
+
+  await stagehand.close();
+  await closeContext();
+};
+
+const closeContext = async () => {
+  const context = await BrowserContextManager.getContext();
+  await context.close();
 };
 
 process.on("exit", async () => {
-  const context = await BrowserContextManager.getContext();
-  await context.close();
+  closeContext();
 });
 
 main();
