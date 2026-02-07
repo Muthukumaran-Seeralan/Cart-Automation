@@ -111,8 +111,41 @@ class BigBasketAutomation extends Automation {
 const main = async () => {
   const stagehand = await ZeptoAutomation.getStageHand();
   const zeptoPage = await ZeptoAutomation.getPage();
+
   await zeptoPage.pause();
-  // Scroll to top to make sure proper header is visible
+
+  // Navigate to Cart using provided XPath
+  console.log("Opening Cart...");
+  await zeptoPage
+    .locator("xpath=/html/body/div[2]/div/div/div/div/div/header/div/div[4]")
+    .click();
+  await zeptoPage.waitForTimeout(2000);
+
+  // Empty Cart Loop
+  console.log("Checking for items to remove...");
+  for (let i = 0; i < 10; i++) {
+    const actions = await stagehand.observe(
+      "find the 'remove' button to delete items from the cart",
+    );
+    const removeAction = actions.find((action) =>
+      action.description.toLowerCase().includes("remove"),
+    );
+
+    if (removeAction) {
+      console.log("Removing item:", removeAction.description);
+      const locator = zeptoPage.locator(removeAction.selector).first();
+      if (await locator.isVisible()) {
+        await locator.click();
+        // specific wait for Zepto UI update
+        await zeptoPage.waitForTimeout(1500);
+      } else {
+        break;
+      }
+    } else {
+      console.log("No remove buttons found. Cart is likely empty.");
+      break;
+    }
+  }
 
   const actions = await stagehand.observe(` find the search bar .`);
   console.log("Observed Actions:", actions);
