@@ -182,6 +182,35 @@ const main = async () => {
   await zeptoPage.waitForTimeout(500);
   // press enter
   await zeptoPage.keyboard.press("Enter");
+  await zeptoPage.waitForTimeout(2000);
+
+  console.log("Verifying item added and finding Cart button...");
+  const cartActions = await stagehand.observe(
+    "Find the cart button/banner. It should be focusable, contain text 'Cart' and '1' indicating an item is added.",
+  );
+
+  console.log("Cart Observations:", cartActions);
+
+  // Find the action that matches the user's description best
+  const cartAction =
+    cartActions.find((action) => {
+      const desc = action.description.toLowerCase();
+      // Look for Cart AND 1, or just Cart if strict match fails, but prioritize the one with '1'
+      return desc.includes("cart") && desc.includes("1");
+    }) ||
+    cartActions.find((action) =>
+      action.description.toLowerCase().includes("cart"),
+    );
+
+  if (cartAction) {
+    console.log("Clicking Cart/Banner:", cartAction);
+    await zeptoPage.locator(cartAction.selector).click();
+    console.log("Clicked Cart button.");
+  } else {
+    console.error("Cart button not found!");
+  }
+
+  await zeptoPage.waitForTimeout(3000);
   await zeptoPage.pause();
 
   await stagehand.close();
