@@ -146,6 +146,9 @@ const main = async () => {
       break;
     }
   }
+  // Close cart drawer to return to main page
+  await zeptoPage.keyboard.press("Escape");
+  await zeptoPage.waitForTimeout(1000);
 
   const actions = await stagehand.observe(` find the search bar .`);
   console.log("Observed Actions:", actions);
